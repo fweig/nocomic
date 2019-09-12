@@ -11,6 +11,12 @@ from http.server import (
         HTTPStatus,
 )
 
+from io import (
+        BytesIO,
+)
+
+import logging as log
+
 from os import (
         listdir,
 )
@@ -24,9 +30,8 @@ from urllib.parse import (
         parse_qs,
 )
 
-from PIL import (
-        Image,
-)
+
+import PIL.Image
 
 
 IP_ADDR = 'localhost'
@@ -60,6 +65,9 @@ HTML_END= """
 </html>
 """
 
+SINGLE_IMG = '<img src="img?id={}">'
+DOUBLE_IMG = '<img src="img?id={}"><img src="img?id={}">'
+
 
 class FileCollection:
 
@@ -74,20 +82,37 @@ class FileFolder(FileCollection):
 
     def __init__(self, path):
         self.root = Path(path)
+        self.filecache = [Path(pathname) for pathname in sorted(listdir(self.root))]
 
     def files(self):
-        return sorted(listdir(self.root))
+        return self.filecache
 
     def read(self, name):
-        fullname = self.root / Path(name)
+        fullname = self.root / name
         with open(fullname, 'rb') as f:
             return f.read()
+
+class ZipArchive(FileCollection):
+
+    def __init__(self, fname):
+        pass
+
+
+class Image:
+
+    def __init__(self, width, height, type_, data):
+
+        self.width  = width
+        self.height = height
+        self.type_  = type_
+        self.data   = data
 
 
 class ImageCache:
 
     def __init__(self, files):
         self.files = files
+        self.cache = {}
 
         # print(self.files.files())
 
@@ -97,16 +122,33 @@ class ImageCache:
     def get(self, ind):
         assert ind >= 0 and ind < self.imgnum()
 
+        if ind in self.cache:
+            log.debug("Cache hit on index {}".format(ind))
+        else:
+            log.debug("Cache miss on index {}".format(ind))
+            self._loadimg(ind)
+
+        return self.cache[ind]
+
+    def prefetch(self, ind):
+        log.debug("Prefetch image {}".format(ind))
+        self._loadimg(self, ind)
+
+
+    def _loadimg(self, ind):
         fs = self.files.files()
 
         fname = fs[ind]
 
-        # TODO get filetype and wrap in PIL image
-        return self.files.read(fname)
+        imgtype = fname.suffix
 
-    def prefetch(self, ind):
-        pass
-    
+        data = self.files.read(fname)
+
+        img = PIL.Image.open(BytesIO(data))
+        width, height = img.size
+
+        self.cache[ind] = Image(width, height, imgtype, data)
+
 
 class RequestHandler(BaseHTTPRequestHandler):
 
@@ -125,21 +167,36 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'text/html')
             self.end_headers()
 
-            page = params['p'][0] if 'p' in params else 0
+            page = int(params['p'][0]) if 'p' in params else 0
 
-            msgtemplate = '<img src="img?id={}">'
+            img1 = cache.get(page)
+            if img1.width >= img1.height:
+                log.debug("Double page")
+                msg = SINGLE_IMG.format(page)
+            else:
+                nextpage = page+1
+                img2 = cache.get(nextpage)
+                if img2.width >= img2.height:
+                    msg = SINGLE_IMG.format(page)
+                else:
+                    msg = DOUBLE_IMG.format(nextpage, page)
 
-            self.sendbody(msgtemplate.format(page))
+            self.sendbody(msg)
+
+            # TODO prefetch next page
 
         elif request.path == '/img':
             self.send_response(HTTPStatus.OK)
 
-            self.send_header('Content-type', 'image/jpeg')
+            imgid = int(params['id'][0])
+            img = cache.get(imgid)
+
+            # self.send_header('Content-type', 'image/{}'.format(img.type_))
+            # TODO determine image type from name
+            self.send_header('Content-type', 'image/jpg')
             self.end_headers()
 
-            imgid = int(params['id'][0])
-
-            self.wfile.write(cache.get(imgid))
+            self.wfile.write(img.data)
 
         else:
 
@@ -165,11 +222,11 @@ class ImageHTTPServer(HTTPServer):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument("image", help="Image thats displayed by the server")
+    parser.add_argument("file", help="Comic file")
 
     args = parser.parse_args()
 
-    fileprovider = FileFolder(args.image)
+    fileprovider = FileFolder(args.file)
     cache = ImageCache(fileprovider)
 
     server = ImageHTTPServer(cache, SERVER_ADDR, RequestHandler)
