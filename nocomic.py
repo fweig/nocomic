@@ -52,21 +52,61 @@ HTML_START = """
         padding: 0;
         display: block;
         margin: 0 auto;
-        max-height: 100%;
+        height: 100%;
         max-width: 100%;
       }
+      a {
+        display: hidden;
+      }
+      .row {
+        display: flex;
+        height: 99%;
+      }
+      .column_left {
+        flex: 50%;
+        height: 100%;
+        padding: 5px;
+      }
+      .column_right {
+        flex: 50%;
+        height: 100%;
+        padding: 5px;
+      }
     </style>
+    <script>
+      document.addEventListener("keyup", function(e) {
+        var key = e.which || e.keyCode;
+        switch (key) {
+          case 37: // left arrow
+            document.getElementById("prev").click();
+            break;
+          case 39: // right arrow
+            document.getElementById("next").click();
+            break;
+        }
+      });
+    </script>
   </head>
   <body>
 """
 
-HTML_END= """
+HTML_END= """ 
   </body>
 </html>
 """
 
 SINGLE_IMG = '<img src="img?id={}">'
-DOUBLE_IMG = '<img src="img?id={}"><img src="img?id={}">'
+DOUBLE_IMG = ''' <div class="row">
+  <div class="column_left">
+    <img src="img?id={}" align="right">
+  </div>
+  <div class="column_right">
+    <img src="img?id={}" align="left">
+  </div>
+</div>
+  <a id="prev" href="reader?p={}"></a>
+  <a id="next" href="reader?p={}"></a>
+'''
 
 
 class FileCollection:
@@ -179,7 +219,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 if img2.width >= img2.height:
                     msg = SINGLE_IMG.format(page)
                 else:
-                    msg = DOUBLE_IMG.format(nextpage, page)
+                    msg = DOUBLE_IMG.format(nextpage, page, page-1, nextpage)
 
             self.sendbody(msg)
 
