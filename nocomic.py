@@ -25,9 +25,15 @@ from pathlib import (
         Path,
 )
 
+import subprocess
+
 from urllib.parse import (
         urlparse,
         parse_qs,
+)
+
+from zipfile import (
+        ZipFile,
 )
 
 
@@ -65,12 +71,12 @@ HTML_START = """
       .column_left {
         flex: 50%;
         height: 100%;
-        padding: 5px;
+        padding: 2px;
       }
       .column_right {
         flex: 50%;
         height: 100%;
-        padding: 5px;
+        padding: 2px;
       }
     </style>
     <script>
@@ -95,7 +101,10 @@ HTML_END= """
 </html>
 """
 
-SINGLE_IMG = '<img src="img?id={}">'
+SINGLE_IMG = '''<img src="img?id={}">
+  <a id="prev" href="reader?p={}"></a>
+  <a id="next" href="reader?p={}"></a>
+'''
 DOUBLE_IMG = ''' <div class="row">
   <div class="column_left">
     <img src="img?id={}" align="right">
@@ -109,6 +118,9 @@ DOUBLE_IMG = ''' <div class="row">
 '''
 
 
+def clamp(x, left, right):
+    return min(right, max(x, left))
+
 class FileCollection:
 
     def files(self):
@@ -121,7 +133,7 @@ class FileCollection:
 class FileFolder(FileCollection):
 
     def __init__(self, path):
-        self.root = Path(path)
+        self.root = path
         self.filecache = [Path(pathname) for pathname in sorted(listdir(self.root))]
 
     def files(self):
@@ -135,8 +147,24 @@ class FileFolder(FileCollection):
 class ZipArchive(FileCollection):
 
     def __init__(self, fname):
-        pass
+        self.file = ZipFile(fname)
+        self.filecache = self.file.namelist()
 
+    def files(self):
+        return self.filecache
+
+    def read(self, name):
+        return self.file.read(name)
+    
+    def __del__(self):
+        self.file.close()
+
+
+FILE_BACKENDS = {
+    'folder': FileFolder,
+    '.zip': ZipArchive,
+    '.cbz': ZipArchive,
+}
 
 class Image:
 
@@ -180,7 +208,7 @@ class ImageCache:
 
         fname = fs[ind]
 
-        imgtype = fname.suffix
+        imgtype = Path(fname).suffix
 
         data = self.files.read(fname)
 
@@ -209,21 +237,28 @@ class RequestHandler(BaseHTTPRequestHandler):
 
             page = int(params['p'][0]) if 'p' in params else 0
 
+            pagenum = cache.imgnum()
+
+            page = clamp(page, 0, pagenum-1)
+
             img1 = cache.get(page)
-            if img1.width >= img1.height:
+
+            if img1.width >= img1.height or page == 0:
                 log.debug("Double page")
-                msg = SINGLE_IMG.format(page)
+                nextpage = clamp(page+1, 0, pagenum-1)
+                prevpage = clamp(page-1, 0, pagenum-1)
+                msg = SINGLE_IMG.format(page, prevpage, nextpage)
             else:
-                nextpage = page+1
-                img2 = cache.get(nextpage)
+                leftpage = clamp(page+1, 0, pagenum-1)
+                nextpage = clamp(page+2, 0, pagenum-1)
+                img2 = cache.get(leftpage)
                 if img2.width >= img2.height:
                     msg = SINGLE_IMG.format(page)
                 else:
-                    msg = DOUBLE_IMG.format(nextpage, page, page-1, nextpage)
+                    prevpage = clamp(page-2, 0, pagenum-1)
+                    msg = DOUBLE_IMG.format(leftpage, page, prevpage, nextpage)
 
             self.sendbody(msg)
-
-            # TODO prefetch next page
 
         elif request.path == '/img':
             self.send_response(HTTPStatus.OK)
@@ -231,9 +266,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             imgid = int(params['id'][0])
             img = cache.get(imgid)
 
-            # self.send_header('Content-type', 'image/{}'.format(img.type_))
-            # TODO determine image type from name
-            self.send_header('Content-type', 'image/jpg')
+            self.send_header('Content-type', 'image/{}'.format(img.type_[1:]))
             self.end_headers()
 
             self.wfile.write(img.data)
@@ -265,8 +298,16 @@ if __name__ == '__main__':
     parser.add_argument("file", help="Comic file")
 
     args = parser.parse_args()
+    
+    f = Path(args.file)
 
-    fileprovider = FileFolder(args.file)
+    if f.is_dir():
+        backendname = 'folder'
+    else:
+        backendname = f.suffix
+
+    fileprovider = FILE_BACKENDS[backendname](args.file)
+
     cache = ImageCache(fileprovider)
 
     server = ImageHTTPServer(cache, SERVER_ADDR, RequestHandler)
