@@ -66,14 +66,9 @@ HTML_START = """
       }
       .row {
         display: flex;
-        height: 99%;
+        height: 99.5%;
       }
-      .column_left {
-        flex: 50%;
-        height: 100%;
-        padding: 2px;
-      }
-      .column_right {
+      .column {
         flex: 50%;
         height: 100%;
         padding: 2px;
@@ -106,10 +101,10 @@ SINGLE_IMG = '''<img src="img?id={}">
   <a id="next" href="reader?p={}"></a>
 '''
 DOUBLE_IMG = ''' <div class="row">
-  <div class="column_left">
+  <div class="column">
     <img src="img?id={}" align="right">
   </div>
-  <div class="column_right">
+  <div class="column">
     <img src="img?id={}" align="left">
   </div>
 </div>
@@ -243,6 +238,8 @@ class RequestHandler(BaseHTTPRequestHandler):
 
             img1 = cache.get(page)
 
+            # TODO check if prev page is double or not, 
+            # to determine if we have to go back by 2 or 1 page
             if img1.width >= img1.height or page == 0:
                 log.debug("Double page")
                 nextpage = clamp(page+1, 0, pagenum-1)
@@ -250,11 +247,13 @@ class RequestHandler(BaseHTTPRequestHandler):
                 msg = SINGLE_IMG.format(page, prevpage, nextpage)
             else:
                 leftpage = clamp(page+1, 0, pagenum-1)
-                nextpage = clamp(page+2, 0, pagenum-1)
                 img2 = cache.get(leftpage)
                 if img2.width >= img2.height:
-                    msg = SINGLE_IMG.format(page)
+                    nextpage = leftpage
+                    prevpage = clamp(page-2, 0, pagenum-1)
+                    msg = SINGLE_IMG.format(page, prevpage, nextpage)
                 else:
+                    nextpage = clamp(page+2, 0, pagenum-1)
                     prevpage = clamp(page-2, 0, pagenum-1)
                     msg = DOUBLE_IMG.format(leftpage, page, prevpage, nextpage)
 
