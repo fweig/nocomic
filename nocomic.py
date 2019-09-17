@@ -112,14 +112,30 @@ DOUBLE_IMG = ''' <div class="row">
   <a id="next" href="reader?p={}"></a>
 '''
 
+IMG_EXTENSIONS = [
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.bmp',
+]
+
+
+def isimg(fn):
+    return Path(fn).suffix in IMG_EXTENSIONS
 
 def clamp(x, left, right):
     return min(right, max(x, left))
 
+
 class FileCollection:
 
+    def __init__(self, files):
+        self.filecache = [Path(f) for f in sorted(files) if isimg(f)]
+        # for f in self.filecache:
+        #     print(f)
+
     def files(self):
-        raise NotImplementedError
+        return self.filecache
 
     def read(self, filename):
         raise NotImplementedError
@@ -128,31 +144,29 @@ class FileCollection:
 class FileFolder(FileCollection):
 
     def __init__(self, path):
+        super().__init__(listdir(path))
         self.root = path
-        self.filecache = [Path(pathname) for pathname in sorted(listdir(self.root))]
-
-    def files(self):
-        return self.filecache
 
     def read(self, name):
         fullname = self.root / name
         with open(fullname, 'rb') as f:
             return f.read()
 
+
 class ZipArchive(FileCollection):
 
     def __init__(self, fname):
         self.file = ZipFile(fname)
-        self.filecache = self.file.namelist()
 
-    def files(self):
-        return self.filecache
+        super().__init__(self.file.namelist())
+
+    def __del__(self):
+        if 'file' in self.__dict__:
+            self.file.close()
 
     def read(self, name):
-        return self.file.read(name)
+        return self.file.read(str(name))
     
-    def __del__(self):
-        self.file.close()
 
 
 FILE_BACKENDS = {
@@ -203,7 +217,7 @@ class ImageCache:
 
         fname = fs[ind]
 
-        imgtype = Path(fname).suffix
+        imgtype = fname.suffix
 
         data = self.files.read(fname)
 
@@ -218,11 +232,8 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         cache = self.server.cache
 
-        print('path:', self.path)
         request = urlparse(self.path)
         params = parse_qs(request.query)
-        print('dir:', request.path)
-        print('params:', params)
         
         if request.path == '/reader':
             self.send_response(HTTPStatus.OK)
@@ -300,10 +311,7 @@ if __name__ == '__main__':
     
     f = Path(args.file)
 
-    if f.is_dir():
-        backendname = 'folder'
-    else:
-        backendname = f.suffix
+    backendname = 'folder' if f.is_dir() else f.suffix
 
     fileprovider = FILE_BACKENDS[backendname](args.file)
 
