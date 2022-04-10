@@ -53,6 +53,7 @@ HTML_START = """
         height: 100%;
         margin: 0;
         padding: 0;
+        background-color: DarkGrey;
       }
       img {
         padding: 0;
@@ -190,6 +191,7 @@ class ImageCache:
     def __init__(self, files):
         self.files = files
         self.cache = {}
+        self.prefetchAll()
 
         # print(self.files.files())
 
@@ -200,16 +202,20 @@ class ImageCache:
         assert ind >= 0 and ind < self.imgnum()
 
         if ind in self.cache:
-            log.debug("Cache hit on index {}".format(ind))
+            log.info("Cache hit on index {}".format(ind))
         else:
-            log.debug("Cache miss on index {}".format(ind))
+            log.info("Cache miss on index {}".format(ind))
             self._loadimg(ind)
 
         return self.cache[ind]
 
+    def prefetchAll(self):
+        for i in range(self.imgnum()):
+            self.prefetch(i)
+
     def prefetch(self, ind):
-        log.debug("Prefetch image {}".format(ind))
-        self._loadimg(self, ind)
+        log.info("Prefetch image {}".format(ind))
+        self._loadimg(ind)
 
 
     def _loadimg(self, ind):
@@ -252,7 +258,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             # TODO check if prev page is double or not, 
             # to determine if we have to go back by 2 or 1 page
             if img1.width >= img1.height or page == 0:
-                log.debug("Double page")
+                log.info("Double page")
                 nextpage = clamp(page+1, 0, pagenum-1)
                 prevpage = clamp(page-1, 0, pagenum-1)
                 msg = SINGLE_IMG.format(page, prevpage, nextpage)
@@ -304,6 +310,10 @@ class ImageHTTPServer(HTTPServer):
 
 
 if __name__ == '__main__':
+    log.basicConfig(level=log.INFO)
+
+    log.info("Test")
+
     parser = ArgumentParser()
     parser.add_argument("file", help="Comic file")
 
