@@ -191,7 +191,7 @@ class ImageCache:
     def __init__(self, files):
         self.files = files
         self.cache = {}
-        self.prefetchAll()
+        # self.prefetchAll()
 
         # print(self.files.files())
 
@@ -202,9 +202,9 @@ class ImageCache:
         assert ind >= 0 and ind < self.imgnum()
 
         if ind in self.cache:
-            log.info("Cache hit on index {}".format(ind))
+            log.debug("Cache hit on index {}".format(ind))
         else:
-            log.info("Cache miss on index {}".format(ind))
+            log.debug("Cache miss on index {}".format(ind))
             self._loadimg(ind)
 
         return self.cache[ind]
@@ -214,7 +214,7 @@ class ImageCache:
             self.prefetch(i)
 
     def prefetch(self, ind):
-        log.info("Prefetch image {}".format(ind))
+        log.debug("Prefetch image {}".format(ind))
         self._loadimg(ind)
 
 
@@ -258,7 +258,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             # TODO check if prev page is double or not, 
             # to determine if we have to go back by 2 or 1 page
             if img1.width >= img1.height or page == 0:
-                log.info("Double page")
+                log.debug("Double page")
                 nextpage = clamp(page+1, 0, pagenum-1)
                 prevpage = clamp(page-1, 0, pagenum-1)
                 msg = SINGLE_IMG.format(page, prevpage, nextpage)
@@ -312,8 +312,6 @@ class ImageHTTPServer(HTTPServer):
 if __name__ == '__main__':
     log.basicConfig(level=log.INFO)
 
-    log.info("Test")
-
     parser = ArgumentParser()
     parser.add_argument("file", help="Comic file")
 
@@ -328,4 +326,6 @@ if __name__ == '__main__':
     cache = ImageCache(fileprovider)
 
     server = ImageHTTPServer(cache, SERVER_ADDR, RequestHandler)
+
+    log.info("Opening server @ http://{}:{}/reader".format(IP_ADDR, PORT))
     server.serve_forever()
