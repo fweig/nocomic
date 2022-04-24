@@ -39,7 +39,7 @@ from zipfile import (
 
 import PIL.Image
 
-
+DO_DEBUG = False
 IP_ADDR = 'localhost'
 PORT = 8080
 SERVER_ADDR = (IP_ADDR, PORT)
@@ -291,6 +291,9 @@ class RequestHandler(BaseHTTPRequestHandler):
 
             self.send_error(HTTPStatus.NOT_FOUND)
 
+    def log_message(self, fmt, *args):
+        log.debug(fmt % args)
+
     def sendbody(self, body):
         self.sendstr(HTML_START)
         self.sendstr(body)
@@ -310,7 +313,11 @@ class ImageHTTPServer(HTTPServer):
 
 
 if __name__ == '__main__':
-    log.basicConfig(level=log.INFO)
+
+    if DO_DEBUG:
+      log.basicConfig(level=log.DEBUG, format='%(levelname)s:%(asctime)s: %(message)s')
+    else:
+        log.basicConfig(level=log.INFO, format='%(message)s')
 
     parser = ArgumentParser()
     parser.add_argument("file", help="Comic file")
