@@ -386,10 +386,10 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
             rightimage, leftimage = nocomic.visibleImages()
             if leftimage is None:
                 log.debug("DOUBLE PAGE {}".format(rightimage))
-                msg = SINGLE_IMG.format(rightimage, 'nextpage', 'prevpage')
+                msg = SINGLE_IMG.format(rightimage, 'prevpage', 'nextpage')
             else:
                 log.debug("left {}, right {}".format(leftimage, rightimage))
-                msg = DOUBLE_IMG.format(leftimage, rightimage, 'nextpage', 'prevpage')
+                msg = DOUBLE_IMG.format(leftimage, rightimage, 'prevpage', 'nextpage')
 
             self.sendbody(msg)
 
