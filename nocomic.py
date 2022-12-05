@@ -233,17 +233,63 @@ class Nocomic:
 
     def __init__(self, userargs):
         f = Path(args.file)
-        backendname = 'folder' if f.is_dir() else f.suffix
-        fileprovider = FILE_BACKENDS[backendname](args.file)
+
+        self.active_file = f
+        self.traverse_dir = False
+        self.progress_file = None
+        self.pagenr = 0
+
+        if f.is_dir():
+            self.progress_file = f / '.nocomic_progress'
+
+            files = [f / x for x in sorted(listdir(f)) if not x.startswith('.')]
+
+            if files[0].suffix in FILE_BACKENDS:
+                self.traverse_dir = True
+
+            if self.traverse_dir:
+                if self.progress_file.exists():
+                    filename, page = self.loadprogress()
+                    log.info("Continuing from {}, page {}".format(filename, page))
+                    self.active_file = f / filename
+                    self.pagenr = page
+                else:
+                    log.info("Starting to read {}".format(filename))
+                    self.active_file = files[0]
+            else:
+                self.active_file = f
+
+        backendname = 'folder' if self.active_file.is_dir() else self.active_file.suffix
+        fileprovider = FILE_BACKENDS[backendname](self.active_file)
         self.cache = ImageCache(fileprovider)
 
-        self.pagenr = 0
+    def saveprogress(self):
+        if self.progress_file is None:
+            return
+
+        with open(self.progress_file, "w") as f:
+            f.write("{}\n{}\n".format(self.active_file.name, self.pagenr))
+
+    def loadprogress(self):
+        with open(self.progress_file, "r") as f:
+            filename = f.readline().rstrip()
+            page = f.readline().rstrip()
+        return filename, int(page)
+
+    def loadnextfile(self):
+        pass
 
     def currentimage(self):
         return self.cache.get(self.pagenr)
 
     def advancepage(self):
-        if self.currentimage().isdoublepage():
+        if self.pagenr >= self.cache.imgnum():
+            self.pagenr = self.cache.imgnum()-1
+            return
+
+        currImgIsDoublePage = self.currentimage().isdoublepage()
+        nextImgIsDoublePage = self.cache.get(self.pagenr + 1).isdoublepage() if self.pagenr < self.cache.imgnum()-1 else False
+        if self.pagenr == 0 or currImgIsDoublePage or nextImgIsDoublePage:
             self._incrementpagenr(1)
         else:
             self._incrementpagenr(2)
@@ -264,7 +310,7 @@ class Nocomic:
 
         img1 = self.currentimage()
 
-        if img1.isdoublepage() or self.pagenr == 0:
+        if img1.isdoublepage() or self.pagenr == 0 or self.pagenr == self.cache.imgnum()-1:
             log.debug("Double page")
             return self.pagenr, None
         else:
@@ -307,11 +353,15 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
 
             rightimage, leftimage = nocomic.visibleImages()
             if leftimage is None:
+                log.debug("DOUBLE PAGE {}".format(rightimage))
                 msg = SINGLE_IMG.format(rightimage, 'nextpage', 'prevpage')
             else:
+                log.debug("left {}, right {}".format(leftimage, rightimage))
                 msg = DOUBLE_IMG.format(leftimage, rightimage, 'nextpage', 'prevpage')
 
             self.sendbody(msg)
+
+            nocomic.saveprogress()
 
         elif request.path == '/img':
             self.send_response(HTTPStatus.OK)
