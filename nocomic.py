@@ -181,6 +181,9 @@ class Image:
         self.type_  = type_
         self.data   = data
 
+    def isdoublepage(self):
+        return self.width >= self.height
+
 
 class ImageCache:
 
@@ -250,7 +253,7 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
 
             # TODO check if prev page is double or not, 
             # to determine if we have to go back by 2 or 1 page
-            if img1.width >= img1.height or page == 0:
+            if img1.isdoublepage() or page == 0:
                 log.debug("Double page")
                 nextpage = clamp(page+1, 0, pagenum-1)
                 prevpage = clamp(page-1, 0, pagenum-1)
@@ -258,7 +261,8 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
             else:
                 leftpage = clamp(page+1, 0, pagenum-1)
                 img2 = cache.get(leftpage)
-                if img2.width >= img2.height:
+
+                if img2.isdoublepage():
                     nextpage = leftpage
                     prevpage = clamp(page-2, 0, pagenum-1)
                     msg = SINGLE_IMG.format(page, prevpage, nextpage)
