@@ -277,7 +277,26 @@ class Nocomic:
         return filename, int(page)
 
     def loadnextfile(self):
-        pass
+        if not self.traverse_dir:
+            return
+
+        workDir = self.active_file.parent
+        files = [workDir / x for x in sorted(listdir(workDir)) if not x.startswith('.')]
+
+        index = files.index(self.active_file)
+
+        # Active file is the last file in this directory? No other files to load.
+        if index == len(files) - 1:
+            return
+
+        self.active_file = files[index + 1]
+
+        log.debug("Opening file '{}'".format(self.active_file))
+
+        backendname = 'folder' if self.active_file.is_dir() else self.active_file.suffix
+        fileprovider = FILE_BACKENDS[backendname](self.active_file)
+        self.cache = ImageCache(fileprovider)
+        self.pagenr = 0
 
     def currentimage(self):
         return self.cache.get(self.pagenr)
@@ -305,6 +324,16 @@ class Nocomic:
                 self._incrementpagenr(-1)
             else:
                 self._incrementpagenr(-2)
+
+    def atend(self):
+        if self.pagenr >= self.cache.imgnum()-1:
+            return True
+
+        if self.pagenr < self.cache.imgnum()-2:
+            return False
+
+        nextimg = self.cache.get(self.pagenr+1)
+        return not nextimg.isdoublepage()
 
     def visibleImages(self):
 
@@ -343,7 +372,10 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
             action = params['action'][0] if 'action' in params else 'none'
 
             if action == 'nextpage':
-                nocomic.advancepage()
+                if nocomic.atend():
+                    nocomic.loadnextfile()
+                else:
+                    nocomic.advancepage()
             elif action == 'prevpage':
                 nocomic.gobackpage()
             elif action == 'none':
