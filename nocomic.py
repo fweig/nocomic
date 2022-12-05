@@ -96,8 +96,8 @@ HTML_END= """
 """
 
 SINGLE_IMG = '''<img src="img?id={}">
-  <a id="prev" href="reader?p={}"></a>
-  <a id="next" href="reader?p={}"></a>
+  <a id="prev" href="?action={}"></a>
+  <a id="next" href="?action={}"></a>
 '''
 DOUBLE_IMG = ''' <div class="row">
   <div class="column">
@@ -107,8 +107,8 @@ DOUBLE_IMG = ''' <div class="row">
     <img src="img?id={}" align="left">
   </div>
 </div>
-  <a id="prev" href="reader?p={}"></a>
-  <a id="next" href="reader?p={}"></a>
+  <a id="prev" href="?action={}"></a>
+  <a id="next" href="?action={}"></a>
 '''
 
 IMG_EXTENSIONS = [
@@ -229,47 +229,87 @@ class ImageCache:
         self.cache[ind] = Image(width, height, imgtype, data)
 
 
+class Nocomic:
+
+    def __init__(self, userargs):
+        f = Path(args.file)
+        backendname = 'folder' if f.is_dir() else f.suffix
+        fileprovider = FILE_BACKENDS[backendname](args.file)
+        self.cache = ImageCache(fileprovider)
+
+        self.pagenr = 0
+
+    def currentimage(self):
+        return self.cache.get(self.pagenr)
+
+    def advancepage(self):
+        if self.currentimage().isdoublepage():
+            self._incrementpagenr(1)
+        else:
+            self._incrementpagenr(2)
+
+    def gobackpage(self):
+        if self.pagenr <= 1:
+            self._incrementpagenr(-1)
+        else:
+            previmg = self.cache.get(self.pagenr - 1)
+            previmg2 = self.cache.get(self.pagenr - 2)
+
+            if previmg.isdoublepage() or previmg2.isdoublepage():
+                self._incrementpagenr(-1)
+            else:
+                self._incrementpagenr(-2)
+
+    def visibleImages(self):
+
+        img1 = self.currentimage()
+
+        if img1.isdoublepage() or self.pagenr == 0:
+            log.debug("Double page")
+            return self.pagenr, None
+        else:
+            leftpage = clamp(self.pagenr+1, 0, self.cache.imgnum()-1)
+            img2 = self.cache.get(leftpage)
+
+            if img2.isdoublepage():
+                return self.pagenr, None
+            else:
+                return self.pagenr, leftpage
+
+    def _incrementpagenr(self, incr):
+        self.pagenr = clamp(self.pagenr+incr, 0, self.cache.imgnum()-1)
+
+
 class NocomicRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
-        cache = self.server.cache
+        nocomic = self.server.nocomic
 
         request = urlparse(self.path)
         params = parse_qs(request.query)
         
-        if request.path == '/reader':
+        if request.path == '/':
             self.send_response(HTTPStatus.OK)
 
             self.send_header('Content-type', 'text/html')
             self.end_headers()
 
-            page = int(params['p'][0]) if 'p' in params else 0
+            action = params['action'][0] if 'action' in params else 'none'
 
-            pagenum = cache.imgnum()
-
-            page = clamp(page, 0, pagenum-1)
-
-            img1 = cache.get(page)
-
-            # TODO check if prev page is double or not, 
-            # to determine if we have to go back by 2 or 1 page
-            if img1.isdoublepage() or page == 0:
-                log.debug("Double page")
-                nextpage = clamp(page+1, 0, pagenum-1)
-                prevpage = clamp(page-1, 0, pagenum-1)
-                msg = SINGLE_IMG.format(page, prevpage, nextpage)
+            if action == 'nextpage':
+                nocomic.advancepage()
+            elif action == 'prevpage':
+                nocomic.gobackpage()
+            elif action == 'none':
+                pass
             else:
-                leftpage = clamp(page+1, 0, pagenum-1)
-                img2 = cache.get(leftpage)
+                log.debug("Unknow action '{}'".format(action))
 
-                if img2.isdoublepage():
-                    nextpage = leftpage
-                    prevpage = clamp(page-2, 0, pagenum-1)
-                    msg = SINGLE_IMG.format(page, prevpage, nextpage)
-                else:
-                    nextpage = clamp(page+2, 0, pagenum-1)
-                    prevpage = clamp(page-2, 0, pagenum-1)
-                    msg = DOUBLE_IMG.format(leftpage, page, prevpage, nextpage)
+            rightimage, leftimage = nocomic.visibleImages()
+            if leftimage is None:
+                msg = SINGLE_IMG.format(rightimage, 'nextpage', 'prevpage')
+            else:
+                msg = DOUBLE_IMG.format(leftimage, rightimage, 'nextpage', 'prevpage')
 
             self.sendbody(msg)
 
@@ -277,7 +317,7 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
             self.send_response(HTTPStatus.OK)
 
             imgid = int(params['id'][0])
-            img = cache.get(imgid)
+            img = nocomic.cache.get(imgid)
 
             self.send_header('Content-type', 'image/{}'.format(img.type_[1:]))
             self.end_headers()
@@ -302,9 +342,9 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
 
 class NocomicServer(HTTPServer):
 
-    def __init__(self, cache, *args, **kwargs):
+    def __init__(self, nocomic, *args, **kwargs):
 
-        self.cache = cache
+        self.nocomic = nocomic
 
         super().__init__(*args, **kwargs)
 
@@ -312,7 +352,7 @@ class NocomicServer(HTTPServer):
 if __name__ == '__main__':
 
     if DO_DEBUG:
-      log.basicConfig(level=log.DEBUG, format='%(levelname)s:%(asctime)s: %(message)s')
+        log.basicConfig(level=log.DEBUG, format='%(levelname)s:%(asctime)s: %(message)s')
     else:
         log.basicConfig(level=log.INFO, format='%(message)s')
 
@@ -321,15 +361,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     
-    f = Path(args.file)
+    nocomic = Nocomic(args)
 
-    backendname = 'folder' if f.is_dir() else f.suffix
+    server = NocomicServer(nocomic, SERVER_ADDR, NocomicRequestHandler)
 
-    fileprovider = FILE_BACKENDS[backendname](args.file)
-
-    cache = ImageCache(fileprovider)
-
-    server = NocomicServer(cache, SERVER_ADDR, NocomicRequestHandler)
-
-    log.info("Read @ http://{}:{}/reader".format(IP_ADDR, PORT))
+    log.info("Read @ http://{}:{}".format(IP_ADDR, PORT))
     server.serve_forever()
