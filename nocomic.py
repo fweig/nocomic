@@ -25,8 +25,6 @@ from pathlib import (
         Path,
 )
 
-import subprocess
-
 from urllib.parse import (
         urlparse,
         parse_qs,
@@ -36,8 +34,8 @@ from zipfile import (
         ZipFile,
 )
 
-
 import PIL.Image
+
 
 DO_DEBUG = False
 IP_ADDR = 'localhost'
@@ -132,8 +130,6 @@ class FileCollection:
 
     def __init__(self, files):
         self.filecache = [Path(f) for f in sorted(files) if isimg(f)]
-        # for f in self.filecache:
-        #     print(f)
 
     def files(self):
         return self.filecache
@@ -169,7 +165,7 @@ class ZipArchive(FileCollection):
         return self.file.read(str(name))
     
 
-
+# TODO: Add support for rar-archives
 FILE_BACKENDS = {
     'folder': FileFolder,
     '.zip': ZipArchive,
@@ -191,9 +187,6 @@ class ImageCache:
     def __init__(self, files):
         self.files = files
         self.cache = {}
-        # self.prefetchAll()
-
-        # print(self.files.files())
 
     def imgnum(self):
         return len(self.files.files())
@@ -233,7 +226,7 @@ class ImageCache:
         self.cache[ind] = Image(width, height, imgtype, data)
 
 
-class RequestHandler(BaseHTTPRequestHandler):
+class NocomicRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         cache = self.server.cache
@@ -303,7 +296,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(bytes(txt, 'utf8'))
 
 
-class ImageHTTPServer(HTTPServer):
+class NocomicServer(HTTPServer):
 
     def __init__(self, cache, *args, **kwargs):
 
@@ -332,7 +325,7 @@ if __name__ == '__main__':
 
     cache = ImageCache(fileprovider)
 
-    server = ImageHTTPServer(cache, SERVER_ADDR, RequestHandler)
+    server = NocomicServer(cache, SERVER_ADDR, NocomicRequestHandler)
 
-    log.info("Opening server @ http://{}:{}/reader".format(IP_ADDR, PORT))
+    log.info("Read @ http://{}:{}/reader".format(IP_ADDR, PORT))
     server.serve_forever()
