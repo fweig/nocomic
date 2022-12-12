@@ -19,4 +19,3 @@ Use arrow keys to navigate. Only supports right-to-left reading order at the mom
 Supported are `cbz`/`zip`-files and unpacked comic-archives (single folder containing only images).
 
 Alternatively you may also open a folder containing any of the files above. In that case files are read in alphabetical order. Useful for reading series. Progress is saved.
-
