@@ -6,8 +6,8 @@ from argparse import (
 )
 
 from http.server import (
-        BaseHTTPRequestHandler, 
-        HTTPServer, 
+        BaseHTTPRequestHandler,
+        HTTPServer,
         HTTPStatus,
 )
 
@@ -16,10 +16,6 @@ from io import (
 )
 
 import logging as log
-
-from os import (
-        listdir,
-)
 
 from pathlib import (
         Path,
@@ -90,7 +86,7 @@ HTML_START = """
   <body>
 """
 
-HTML_END= """ 
+HTML_END= """
   </body>
 </html>
 """
@@ -125,6 +121,9 @@ def isimg(fn):
 def clamp(x, left, right):
     return min(right, max(x, left))
 
+def sortAndFilterComicFilesInDir(directory):
+    return [directory / x.name for x in sorted(directory.iterdir()) if not x.name.startswith('.')]
+
 
 class FileCollection:
 
@@ -141,7 +140,7 @@ class FileCollection:
 class FileFolder(FileCollection):
 
     def __init__(self, path):
-        super().__init__(listdir(path))
+        super().__init__(path.iterdir())
         self.root = path
 
     def read(self, name):
@@ -163,7 +162,7 @@ class ZipArchive(FileCollection):
 
     def read(self, name):
         return self.file.read(str(name))
-    
+
 
 # TODO: Add support for rar-archives
 FILE_BACKENDS = {
@@ -242,7 +241,7 @@ class Nocomic:
         if f.is_dir():
             self.progress_file = f / '.nocomic_progress'
 
-            files = [f / x for x in sorted(listdir(f)) if not x.startswith('.')]
+            files = sortAndFilterComicFilesInDir(f)
 
             if files[0].suffix in FILE_BACKENDS:
                 self.traverse_dir = True
@@ -281,7 +280,7 @@ class Nocomic:
             return
 
         workDir = self.active_file.parent
-        files = [workDir / x for x in sorted(listdir(workDir)) if not x.startswith('.')]
+        files = sortAndFilterComicFilesInDir(workDir)
 
         index = files.index(self.active_file)
 
@@ -362,7 +361,7 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
 
         request = urlparse(self.path)
         params = parse_qs(request.query)
-        
+
         if request.path == '/':
             self.send_response(HTTPStatus.OK)
 
@@ -442,7 +441,7 @@ if __name__ == '__main__':
     parser.add_argument("file", help="Comic file")
 
     args = parser.parse_args()
-    
+
     nocomic = Nocomic(args)
 
     server = NocomicServer(nocomic, SERVER_ADDR, NocomicRequestHandler)
