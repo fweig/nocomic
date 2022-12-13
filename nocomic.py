@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+#
+# TODO
+# - Simplify folder handling
+#   - Remove folder backend
+#   - Remove checks if folder is a comic or a folder of comics
+# - Simplify image handling (Check performance with / without prefetchAll on slow laptop first!)
+#   - Don't store image data in ImageCache
+#   - Remove PIL dependency: Write own function to parse image headers
 
 
 from argparse import (
@@ -42,45 +50,48 @@ HTML_START = """
 <!DOCTYPE html>
 <html>
   <head>
+    <link rel="icon" href="data:,"/>
+    <link rel="preload" href="img?id={}" as="image"/>
+    <link rel="preload" href="img?id={}" as="image"/>
     <style>
-      html, body {
+      html, body {{
         height: 100%;
         margin: 0;
         padding: 0;
         background-color: DarkGrey;
-      }
-      img {
+      }}
+      img {{
         padding: 0;
         display: block;
         margin: 0 auto;
         height: 100%;
         max-width: 100%;
-      }
-      a {
+      }}
+      a {{
         display: hidden;
-      }
-      .row {
+      }}
+      .row {{
         display: flex;
         height: 99.5%;
-      }
-      .column {
+      }}
+      .column {{
         flex: 50%;
         height: 100%;
         padding: 2px;
-      }
+      }}
     </style>
     <script>
-      document.addEventListener("keyup", function(e) {
+      document.addEventListener("keyup", function(e) {{
         var key = e.which || e.keyCode;
-        switch (key) {
+        switch (key) {{
           case 37: // left arrow
             document.getElementById("prev").click();
             break;
           case 39: // right arrow
             document.getElementById("next").click();
             break;
-        }
-      });
+        }}
+      }});
     </script>
   </head>
   <body>
@@ -365,9 +376,6 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
         if request.path == '/':
             self.send_response(HTTPStatus.OK)
 
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-
             action = params['action'][0] if 'action' in params else 'none'
 
             if action == 'nextpage':
@@ -385,12 +393,18 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
             rightimage, leftimage = nocomic.visibleImages()
             if leftimage is None:
                 log.debug("DOUBLE PAGE {}".format(rightimage))
-                msg = SINGLE_IMG.format(rightimage, 'prevpage', 'nextpage')
+                htmlbody = SINGLE_IMG.format(rightimage, 'prevpage', 'nextpage')
+                nextimageToPrefetch = rightimage + 1
             else:
                 log.debug("left {}, right {}".format(leftimage, rightimage))
-                msg = DOUBLE_IMG.format(leftimage, rightimage, 'prevpage', 'nextpage')
+                htmlbody = DOUBLE_IMG.format(leftimage, rightimage, 'prevpage', 'nextpage')
+                nextimageToPrefetch = leftimage + 1
 
-            self.sendbody(msg)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.sendstr(HTML_START.format(nextimageToPrefetch, nextimageToPrefetch+1))
+            self.sendstr(htmlbody)
+            self.sendstr(HTML_END)
 
             nocomic.saveprogress()
 
@@ -400,7 +414,10 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
             imgid = int(params['id'][0])
             img = nocomic.cache.get(imgid)
 
+            log.debug(f"Load image {imgid}")
+
             self.send_header('Content-type', 'image/{}'.format(img.type_[1:]))
+            self.send_header('Cache-Control', 'max-age=180')
             self.end_headers()
 
             self.wfile.write(img.data)
@@ -411,11 +428,6 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         log.debug(fmt % args)
-
-    def sendbody(self, body):
-        self.sendstr(HTML_START)
-        self.sendstr(body)
-        self.sendstr(HTML_END)
 
     def sendstr(self, txt):
         self.wfile.write(bytes(txt, 'utf8'))
