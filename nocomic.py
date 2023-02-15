@@ -207,7 +207,7 @@ class ImageCache:
         return len(self.files.files())
 
     def get(self, ind):
-        assert ind >= 0 and ind < self.imgnum()
+        assert ind >= 0 and ind < self.imgnum(), "Index out of range: index={}, num={}".format(ind, self.imgnum())
 
         if ind in self.cache:
             log.debug("Cache hit on index {}".format(ind))
