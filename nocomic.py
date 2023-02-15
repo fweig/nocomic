@@ -27,6 +27,8 @@ import logging as log
 
 from pathlib import (
         Path,
+        PurePath,
+        PurePosixPath,
 )
 
 from urllib.parse import (
@@ -126,8 +128,8 @@ IMG_EXTENSIONS = [
 ]
 
 
-def isimg(fn):
-    return Path(fn).suffix in IMG_EXTENSIONS
+def isimg(fn : PurePath):
+    return fn.suffix in IMG_EXTENSIONS
 
 def clamp(x, left, right):
     return min(right, max(x, left))
@@ -139,7 +141,7 @@ def sortAndFilterComicFilesInDir(directory):
 class FileCollection:
 
     def __init__(self, files):
-        self.filecache = [Path(f) for f in sorted(files) if isimg(f)]
+        self.filecache = [f for f in sorted(files) if isimg(f)]
 
     def files(self):
         return self.filecache
@@ -163,9 +165,9 @@ class FileFolder(FileCollection):
 class ZipArchive(FileCollection):
 
     def __init__(self, fname):
+        # TODO: Use ZipFile.Path instead of ZipFile.namelist
         self.file = ZipFile(fname)
-
-        super().__init__(self.file.namelist())
+        super().__init__([PurePosixPath(f) for f in self.file.namelist()])
 
     def __del__(self):
         if 'file' in self.__dict__:
@@ -264,7 +266,7 @@ class Nocomic:
                     self.active_file = f / filename
                     self.pagenr = page
                 else:
-                    log.info("Starting to read {}".format(filename))
+                    log.info("Starting to read {}".format(files[0]))
                     self.active_file = files[0]
             else:
                 self.active_file = f
