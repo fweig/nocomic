@@ -67,19 +67,20 @@ HTML_START = """
         display: block;
         margin: 0 auto;
         height: 100%;
-        max-width: 100%;
       }}
       a {{
         display: hidden;
       }}
       .row {{
         display: flex;
-        height: 99.5%;
+        height: 100%;
       }}
       .column {{
         flex: 50%;
         height: 100%;
         padding: 2px;
+        padding-top: 0;
+        padding-bottom: 0;
       }}
     </style>
     <script>
@@ -104,7 +105,9 @@ HTML_END= """
 </html>
 """
 
-SINGLE_IMG = '''<img src="img?id={}">
+SINGLE_IMG = '''<div class="row">
+    <img src="img?id={}">
+</div>
   <a id="prev" href="?action={}"></a>
   <a id="next" href="?action={}"></a>
 '''
