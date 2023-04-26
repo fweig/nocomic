@@ -73,7 +73,7 @@ HTML_START = """
       }}
       .row {{
         display: flex;
-        height: 100%;
+        height: 99.5%;
       }}
       .column {{
         flex: 50%;
@@ -82,6 +82,24 @@ HTML_START = """
         padding-top: 0;
         padding-bottom: 0;
       }}
+      .progress-bar-container {{
+        width: 100%;
+        height: 0.5%;
+        background-color: #e0e0e0;
+        position: relative;
+        overflow: hidden
+      }}
+      .progress-bar {{
+        height: 100%;
+        background-color: #2196f3;
+        display: flex;
+        align-items: center;
+      }}
+    #   .page-counter {{
+    #     font-size: 10px;
+    #     color: #ffffff;
+    #     margin-left: 10px;
+    #   }}
     </style>
     <script>
       document.addEventListener("keyup", function(e) {{
@@ -100,7 +118,16 @@ HTML_START = """
   <body>
 """
 
+# Display a progress bar at the bottom of the page
+# progress bar should be a light grey color and display the current page number and total number of pages
 HTML_END= """
+    <div class="progress-bar-container">
+        <div class="progress-bar" style="width: {}%">
+            <!--
+            <span class="page-counter">Page {} of {}</span>
+            -->
+        </div>
+    </div>
   </body>
 </html>
 """
@@ -252,6 +279,7 @@ class Nocomic:
         self.active_file = f
         self.traverse_dir = False
         self.progress_file = None
+        self.first_page_is_double = args.doublepage
         self.pagenr = 0
 
         if f.is_dir():
@@ -274,6 +302,7 @@ class Nocomic:
             else:
                 self.active_file = f
 
+        print("Reading {}".format(self.active_file))
         backendname = 'folder' if self.active_file.is_dir() else self.active_file.suffix
         fileprovider = FILE_BACKENDS[backendname](self.active_file)
         self.cache = ImageCache(fileprovider)
@@ -323,7 +352,7 @@ class Nocomic:
 
         currImgIsDoublePage = self.currentimage().isdoublepage()
         nextImgIsDoublePage = self.cache.get(self.pagenr + 1).isdoublepage() if self.pagenr < self.cache.imgnum()-1 else False
-        if self.pagenr == 0 or currImgIsDoublePage or nextImgIsDoublePage:
+        if (self.pagenr == 0 and self.first_page_is_double) or currImgIsDoublePage or nextImgIsDoublePage:
             self._incrementpagenr(1)
         else:
             self._incrementpagenr(2)
@@ -354,7 +383,7 @@ class Nocomic:
 
         img1 = self.currentimage()
 
-        if img1.isdoublepage() or self.pagenr == 0 or self.pagenr == self.cache.imgnum()-1:
+        if img1.isdoublepage() or (self.pagenr == 0 and self.first_page_is_double) or self.pagenr == self.cache.imgnum()-1:
             log.debug("Double page")
             return self.pagenr, None
         else:
@@ -409,7 +438,8 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.sendstr(HTML_START.format(nextimageToPrefetch, nextimageToPrefetch+1))
             self.sendstr(htmlbody)
-            self.sendstr(HTML_END)
+            progress = nocomic.pagenr / nocomic.cache.imgnum() * 100
+            self.sendstr(HTML_END.format(progress, nocomic.pagenr, nocomic.cache.imgnum()))
 
             nocomic.saveprogress()
 
@@ -456,6 +486,8 @@ if __name__ == '__main__':
 
     parser = ArgumentParser()
     parser.add_argument("file", help="Comic file")
+    # Add flag to treat page 0 as double page
+    parser.add_argument("--doublepage", help="Treat page 0 as double page", action="store_true")
 
     args = parser.parse_args()
 
