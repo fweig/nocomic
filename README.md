@@ -12,7 +12,7 @@ pip3 install pillow
 python3 nocomic.py <PathToArchiveOrFolder>
 ```
 
-Read at http://localhost:8080.
+Read at http://localhost:8080. Use `Ctrl+C` to exit.
 
 Use arrow keys to navigate. Only supports right-to-left reading order at the moment.
 

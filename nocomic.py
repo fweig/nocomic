@@ -31,6 +31,8 @@ from pathlib import (
         PurePosixPath,
 )
 
+import signal
+
 from urllib.parse import (
         urlparse,
         parse_qs,
@@ -157,6 +159,9 @@ IMG_EXTENSIONS = [
     '.bmp',
 ]
 
+def sigterm_handler(signum, frame):
+    log.debug('Received SIGINT, exiting...')
+    exit(0)
 
 def isimg(fn : PurePath):
     return fn.suffix in IMG_EXTENSIONS
@@ -274,12 +279,12 @@ class ImageCache:
 class Nocomic:
 
     def __init__(self, userargs):
-        f = Path(args.file)
+        f = Path(userargs.file)
 
         self.active_file = f
         self.traverse_dir = False
         self.progress_file = None
-        self.first_page_is_double = args.doublepage
+        self.first_page_is_double = userargs.doublepage
         self.pagenr = 0
 
         if f.is_dir():
@@ -302,7 +307,7 @@ class Nocomic:
             else:
                 self.active_file = f
 
-        print("Reading {}".format(self.active_file))
+        log.debug("Reading {}".format(self.active_file))
         backendname = 'folder' if self.active_file.is_dir() else self.active_file.suffix
         fileprovider = FILE_BACKENDS[backendname](self.active_file)
         self.cache = ImageCache(fileprovider)
@@ -476,9 +481,7 @@ class NocomicServer(HTTPServer):
 
         super().__init__(*args, **kwargs)
 
-
-if __name__ == '__main__':
-
+def main():
     if DO_DEBUG:
         log.basicConfig(level=log.DEBUG, format='%(levelname)s:%(asctime)s: %(message)s')
     else:
@@ -489,11 +492,15 @@ if __name__ == '__main__':
     # Add flag to treat page 0 as double page
     parser.add_argument("--doublepage", help="Treat page 0 as double page", action="store_true")
 
-    args = parser.parse_args()
-
+    args    = parser.parse_args()
     nocomic = Nocomic(args)
+    server  = NocomicServer(nocomic, SERVER_ADDR, NocomicRequestHandler)
 
-    server = NocomicServer(nocomic, SERVER_ADDR, NocomicRequestHandler)
+    signal.signal(signal.SIGINT, sigterm_handler)
 
-    log.info("Read @ http://{}:{}".format(IP_ADDR, PORT))
+    log.info("Read @ http://{}:{}, exit with Ctrl+C".format(IP_ADDR, PORT))
+
     server.serve_forever()
+
+if __name__ == '__main__':
+    main()
