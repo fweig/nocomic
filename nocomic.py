@@ -75,7 +75,7 @@ HTML_START = """
       }}
       .row {{
         display: flex;
-        height: 99.5%;
+        height: 99.75%;
       }}
       .column {{
         flex: 50%;
@@ -86,10 +86,11 @@ HTML_START = """
       }}
       .progress-bar-container {{
         width: 100%;
-        height: 0.5%;
-        background-color: #e0e0e0;
+        height: 0.25%;
+        # background-color: #e0e0e0;
         position: relative;
-        overflow: hidden
+        overflow: hidden;
+        outline: 1px solid Grey;
       }}
       .progress-bar {{
         height: 100%;
