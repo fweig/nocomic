@@ -440,12 +440,16 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
                 htmlbody = DOUBLE_IMG.format(leftimage, rightimage, 'prevpage', 'nextpage')
                 nextimageToPrefetch = leftimage + 1
 
+            nImages = nocomic.cache.imgnum()
+            nextimageToPrefetch = clamp(nextimageToPrefetch, 0, nImages-1)
+            nextimageToPrefetch2 = clamp(nextimageToPrefetch+1, 0, nImages-1)
+
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.sendstr(HTML_START.format(nextimageToPrefetch, nextimageToPrefetch+1))
+            self.sendstr(HTML_START.format(nextimageToPrefetch, nextimageToPrefetch2))
             self.sendstr(htmlbody)
-            progress = nocomic.pagenr / nocomic.cache.imgnum() * 100
-            self.sendstr(HTML_END.format(progress, nocomic.pagenr, nocomic.cache.imgnum()))
+            progress = nocomic.pagenr / nImages * 100
+            self.sendstr(HTML_END.format(progress, nocomic.pagenr, nImages))
 
             nocomic.saveprogress()
 
