@@ -299,11 +299,11 @@ class Nocomic:
             if self.traverse_dir:
                 if self.progress_file.exists():
                     filename, page = self.loadprogress()
-                    log.info("Continuing from {}, page {}".format(filename, page))
+                    log.info("Continuing from '{}', page {}".format(filename, page))
                     self.active_file = f / filename
                     self.pagenr = page
                 else:
-                    log.info("Starting to read {}".format(files[0]))
+                    log.info("Starting to read '{}'".format(files[0]))
                     self.active_file = files[0]
             else:
                 self.active_file = f
