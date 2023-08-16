@@ -1,3 +1,6 @@
+# Custom files
+waifu2x-ncnn-vulkan/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
