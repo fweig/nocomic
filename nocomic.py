@@ -341,7 +341,7 @@ class Nocomic:
 
         self.active_file = files[index + 1]
 
-        log.debug("Opening file '{}'".format(self.active_file))
+        log.info("Opening file '{}'".format(self.active_file))
 
         backendname = 'folder' if self.active_file.is_dir() else self.active_file.suffix
         fileprovider = FILE_BACKENDS[backendname](self.active_file)
@@ -401,6 +401,9 @@ class Nocomic:
             else:
                 return self.pagenr, leftpage
 
+    def progress(self):
+        return self.pagenr / self.cache.imgnum() * 100
+
     def _incrementpagenr(self, incr):
         self.pagenr = clamp(self.pagenr+incr, 0, self.cache.imgnum()-1)
 
@@ -448,7 +451,7 @@ class NocomicRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.sendstr(HTML_START.format(nextimageToPrefetch, nextimageToPrefetch2))
             self.sendstr(htmlbody)
-            progress = nocomic.pagenr / nImages * 100
+            progress = nocomic.progress()
             self.sendstr(HTML_END.format(progress, nocomic.pagenr, nImages))
 
             nocomic.saveprogress()
